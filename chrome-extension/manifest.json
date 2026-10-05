@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "애니 오디오 브리지",
+  "version": "1.0.0",
+  "description": "Chrome 탭 오디오를 애니 오디오 한글자막 프로그램으로 보내고, 한국어 자막을 표시합니다.",
+  "minimum_chrome_version": "138",
+  "permissions": [
+    "activeTab",
+    "offscreen",
+    "scripting",
+    "storage",
+    "tabCapture"
+  ],
+  "host_permissions": [
+    "https://gogoanime.it.com/*",
+    "https://*.gogoanime.it.com/*",
+    "https://gogoanime.by/*",
+    "https://*.gogoanime.by/*",
+    "http://127.0.0.1:38495/*",
+    "https://translate.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "애니 오디오 한글자막 시작/중지"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gogoanime.it.com/*",
+        "https://*.gogoanime.it.com/*",
+        "https://gogoanime.by/*",
+        "https://*.gogoanime.by/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:38495 http://127.0.0.1:38495"
+  }
+}
