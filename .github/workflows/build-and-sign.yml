@@ -1,0 +1,69 @@
+name: Build and sign Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-sign:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish self-contained Windows program
+        shell: pwsh
+        run: |
+          dotnet publish src/AnimeAudioCaptioner/AnimeAudioCaptioner.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output publish
+          Compress-Archive -Path publish\* -DestinationPath AnimeAudioCaptioner-win-x64.zip
+
+      - name: Upload unsigned verification artifact to GitHub
+        id: unsigned-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anime-audio-captioner-win-x64-unsigned-verification-only
+          if-no-files-found: error
+          path: AnimeAudioCaptioner-win-x64.zip
+
+      - name: Submit release build to SignPath
+        id: signpath
+        if: >-
+          ${{ secrets.SIGNPATH_API_TOKEN != '' &&
+              secrets.SIGNPATH_EXTENDED_VERIFICATION_TOKEN != '' &&
+              vars.SIGNPATH_ORGANIZATION_ID != '' &&
+              vars.SIGNPATH_PROJECT_SLUG != '' &&
+              vars.SIGNPATH_SIGNING_POLICY_SLUG != '' &&
+              vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG != '' }}
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned-artifact.outputs.artifact-id }}
+          github-extended-verification-token: ${{ secrets.SIGNPATH_EXTENDED_VERIFICATION_TOKEN }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Upload signed release artifact
+        if: ${{ steps.signpath.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: anime-audio-captioner-win-x64-signed
+          if-no-files-found: error
+          path: signed/**
