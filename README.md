@@ -31,6 +31,10 @@ Microsoft Partner Center 없이도 공개 오픈소스 프로젝트는 SignPath 
 
 Chrome 확장 프로그램은 별도로 Chrome Web Store에 게시해야 일반 사용자 설치가 가능합니다. 개발자 모드 압축 해제 설치는 검사용으로만 사용합니다.
 
+## Code signing policy
+
+정식 공개본은 공개 소스와 GitHub Actions 빌드에서 나온 파일만 서명합니다. 역할, 릴리스 승인 절차, 서명 대상은 [Code signing policy](CODE_SIGNING_POLICY.md)에, 탭 오디오·번역 처리에 관한 안내는 [개인정보 처리방침](PRIVACY.md)에 있습니다.
+
 ## 검증된 범위
 
 - `src/AnimeAudioCaptioner`는 `win-x64` Windows GUI `.exe`로 컴파일했다.
