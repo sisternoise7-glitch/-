@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>애니 오디오 브리지 설정</title>
     <style>
-      body{margin:0;background:#10131a;color:#edf2f7;font:16px/1.55 "Malgun Gothic","Apple SD Gothic Neo",sans-serif}main{max-width:650px;margin:48px auto;padding:0 24px}h1{margin:0 0 8px;font-size:26px}.note,.small{color:#b9c3d3}.card{margin-top:24px;padding:20px;border:1px solid #2a3446;border-radius:12px;background:#171d28}label{display:block;margin:12px 0;padding:12px;border:1px solid #35445d;border-radius:9px;cursor:pointer}label:has(input:checked){border-color:#7c3aed;background:#252040}input{margin-right:9px}button{margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font:inherit;font-weight:700;cursor:pointer}.status{min-height:24px;color:#a7f3d0}
+      body{margin:0;background:#10131a;color:#edf2f7;font:16px/1.55 "Malgun Gothic","Apple SD Gothic Neo",sans-serif}main{max-width:650px;margin:48px auto;padding:0 24px}h1{margin:0 0 8px;font-size:26px}.note,.small{color:#b9c3d3}.small a{color:#c4b5fd}.card{margin-top:24px;padding:20px;border:1px solid #2a3446;border-radius:12px;background:#171d28}label{display:block;margin:12px 0;padding:12px;border:1px solid #35445d;border-radius:9px;cursor:pointer}label:has(input:checked){border-color:#7c3aed;background:#252040}input{margin-right:9px}button{margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font:inherit;font-weight:700;cursor:pointer}.status{min-height:24px;color:#a7f3d0}
     </style>
   </head>
   <body>
@@ -16,9 +16,13 @@
         <strong>음성 언어</strong>
         <label><input type="radio" name="language" value="ja" checked> 일본어 음성 → 한글</label>
         <label><input type="radio" name="language" value="en"> 영어 음성 → 한글</label>
+        <strong>번역 보조</strong>
+        <label><input id="external-translation" type="checkbox" checked> Chrome 내장 번역을 쓸 수 없을 때만 Google 번역 보조 사용</label>
+        <p class="small">켜면 인식된 텍스트만 Google 번역으로 전송합니다. 영상과 탭 오디오는 전송하지 않으며, 언제든 끌 수 있습니다.</p>
         <button id="save" type="button">저장</button>
         <p id="status" class="status" role="status"></p>
         <p class="small">다음에 시작하는 탭부터 적용됩니다. 에피소드마다 다시 선택할 필요는 없습니다.</p>
+        <p class="small"><a href="https://github.com/sisternoise7-glitch/-/blob/main/PRIVACY.md" target="_blank" rel="noreferrer">개인정보 처리방침 보기</a></p>
       </section>
     </main>
     <script src="options.js"></script>
