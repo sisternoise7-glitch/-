@@ -8,6 +8,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyTitle>Anime Audio Captioner</AssemblyTitle>
+    <Product>Anime Audio Captioner</Product>
+    <Description>Local audio recognition and Korean captions for a selected Chrome tab.</Description>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <InformationalVersion>0.1.0</InformationalVersion>
     <!-- 단일 파일 패커를 쓰지 않는다. Store/MSIX 서명 전의 파일 변조 위험을 줄인다. -->
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>true</SelfContained>
