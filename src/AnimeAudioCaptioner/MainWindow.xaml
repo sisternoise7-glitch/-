@@ -1,7 +1,7 @@
 <Window x:Class="AnimeAudioCaptioner.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="애니 오디오 한글자막" Height="420" Width="610"
+        Title="음성 한글자막" Height="430" Width="610"
         MinHeight="380" MinWidth="560" WindowStartupLocation="CenterScreen"
         Background="#10131A" Foreground="#F3F4F6">
   <Grid Margin="30">
@@ -13,9 +13,9 @@
     </Grid.RowDefinitions>
 
     <StackPanel>
-      <TextBlock Text="애니 오디오 한글자막" FontSize="28" FontWeight="Bold" />
+      <TextBlock Text="음성 한글자막" FontSize="28" FontWeight="Bold" />
       <TextBlock Margin="0,8,0,0" Foreground="#B8C2D1" TextWrapping="Wrap"
-                 Text="Chrome 확장이 현재 탭의 소리를 보내면, 이 프로그램이 음성을 인식합니다. 사이트 자막·화면 OCR·전체화면은 사용하지 않습니다." />
+                 Text="사이트·브라우저·전체화면과 무관합니다. 이 PC에서 재생되는 일본어 또는 영어 음성을 듣고 화면 위에 한국어 자막을 띄웁니다." />
     </StackPanel>
 
     <Border Grid.Row="1" Margin="0,22,0,18" Padding="16" CornerRadius="10" Background="#182130" BorderBrush="#2B3A51" BorderThickness="1">
@@ -28,17 +28,24 @@
     <Border Grid.Row="2" Padding="16" CornerRadius="10" Background="#151B26" BorderBrush="#29364A" BorderThickness="1">
       <StackPanel>
         <TextBlock Text="사용 순서" FontWeight="SemiBold" />
+        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+          <TextBlock VerticalAlignment="Center" Text="듣는 언어" Foreground="#C3CEDD" />
+          <ComboBox x:Name="LanguageBox" Width="160" Margin="14,0,0,0" SelectedIndex="0">
+            <ComboBoxItem Content="일본어" Tag="ja" />
+            <ComboBoxItem Content="영어" Tag="en" />
+          </ComboBox>
+        </StackPanel>
         <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#C3CEDD"
-                   Text="1. 이 프로그램을 켭니다.  2. Chrome에서 영상을 평소처럼 재생합니다.  3. '애니 오디오 브리지' 확장 아이콘을 한 번 누릅니다.  4. 자막은 Chrome 영상 위에만 표시됩니다." />
+                   Text="1. 이 프로그램을 켭니다.  2. 일본어 음성이 나오는 영상을 평소처럼 재생합니다.  3. 한국어 자막이 화면 아래에 자동으로 표시됩니다." />
         <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#8FE0B0"
-                   Text="첫 실행에는 일본어 음성 인식 모델(약 148MB)을 한 번 내려받습니다. 이후 에피소드별 파일 선택은 없습니다." />
+                   Text="첫 실행에는 음성 인식 모델(약 148MB)을 한 번 내려받습니다. 이후 영상 파일이나 자막 파일을 선택할 필요가 없습니다." />
         <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#B8C2D1"
-                   Text="개인정보: 탭 오디오는 이 PC 안에서 처리합니다. Chrome 내장 번역을 쓸 수 없을 때만, 확장 설정에 따라 인식된 텍스트가 Google 번역으로 전송될 수 있습니다." />
+                   Text="음성은 이 PC 안에서 인식합니다. 인식된 문장만 한국어 번역을 위해 전송됩니다." />
       </StackPanel>
     </Border>
 
     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
-      <Button x:Name="StartButton" Width="124" Height="36" Margin="0,0,10,0" Click="StartButton_Click">다시 시작</Button>
+      <Button x:Name="StartButton" Width="124" Height="36" Margin="0,0,10,0" Click="StartButton_Click">자막 시작</Button>
       <Button Width="96" Height="36" Click="StopButton_Click">중지</Button>
     </StackPanel>
   </Grid>

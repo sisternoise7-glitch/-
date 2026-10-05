@@ -1,0 +1,14 @@
+<Window x:Class="AnimeAudioCaptioner.CaptionOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="Transparent" Topmost="True" ShowInTaskbar="False"
+        ShowActivated="False" IsHitTestVisible="False">
+  <Grid VerticalAlignment="Bottom" Margin="90,0,90,100">
+    <Border x:Name="CaptionBox" Padding="18,12" CornerRadius="12" Background="#D9000000" Opacity="0">
+      <TextBlock x:Name="CaptionText" MaxWidth="1300" TextWrapping="Wrap" TextAlignment="Center"
+                 Foreground="White" FontSize="30" FontWeight="SemiBold" LineHeight="43"
+                 TextOptions.TextFormattingMode="Display" />
+    </Border>
+  </Grid>
+</Window>
