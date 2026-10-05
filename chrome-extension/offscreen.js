@@ -64,6 +64,10 @@ async function translateTranscript(original, target) {
   const token = ++target.translationToken;
   try {
     const local = await createTranslator(target.sourceLanguage, target);
+    const { allowExternalTranslation = true } = await chrome.storage.local.get({ allowExternalTranslation: true });
+    if (!local && !allowExternalTranslation) {
+      throw new Error('Chrome 내장 번역을 사용할 수 없고 Google 번역 보조가 꺼져 있어요. 확장 프로그램 옵션에서 켤 수 있습니다.');
+    }
     const korean = local ? await local.translate(original) : await fallbackTranslate(original, target.sourceLanguage);
     if (capture !== target || !target.running || token !== target.translationToken || !korean) return;
     tell('bridge-caption', { original, korean: String(korean).trim() }, target);
