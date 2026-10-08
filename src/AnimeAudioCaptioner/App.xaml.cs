@@ -8,6 +8,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
         try
         {
             var window = new MainWindow();
@@ -22,7 +23,7 @@ public partial class App : Application
         }
     }
 
-    protected override void OnDispatcherUnhandledException(DispatcherUnhandledExceptionEventArgs e)
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         MessageBox.Show(e.Exception.ToString(), "음성 한글자막 오류", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
