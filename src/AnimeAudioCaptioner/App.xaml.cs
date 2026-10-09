@@ -1,13 +1,32 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using AnimeAudioCaptioner.Services;
 
 namespace AnimeAudioCaptioner;
 
 public partial class App : Application
 {
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Contains("--self-test"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            try
+            {
+                using var engine = new WhisperCaptionEngine();
+                await engine.VerifyRecognitionAsync();
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test.txt"), "MODEL_LOAD_AND_RECOGNITION_OK");
+                Shutdown(0);
+            }
+            catch (Exception error)
+            {
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test.txt"), error.ToString());
+                Shutdown(1);
+            }
+            return;
+        }
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         try
         {
