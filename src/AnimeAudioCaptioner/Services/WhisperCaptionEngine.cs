@@ -30,22 +30,74 @@ public sealed class WhisperCaptionEngine : IDisposable
         try
         {
             if (_factory is not null) return;
+            var bundled = Path.Combine(AppContext.BaseDirectory, "Models", "ggml-base.bin");
             var models = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnimeAudioCaptioner", "Models");
-            Directory.CreateDirectory(models);
-            var modelPath = Path.Combine(models, "ggml-base.bin");
-            if (!File.Exists(modelPath))
+            var modelPath = bundled;
+            if (!IsValidModel(modelPath))
             {
-                StatusChanged?.Invoke(this, "일본어 음성 인식 모델을 처음 내려받는 중…");
-                await using var source = await WhisperGgmlDownloader.Default.GetGgmlModelAsync(GgmlType.Base);
-                await using var target = new FileStream(modelPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                await source.CopyToAsync(target, cancellationToken);
+                Directory.CreateDirectory(models);
+                modelPath = Path.Combine(models, "ggml-base.bin");
+                if (!IsValidModel(modelPath))
+                {
+                    var temporary = Path.Combine(models, Guid.NewGuid().ToString("N") + ".download");
+                    try
+                    {
+                        StatusChanged?.Invoke(this, "음성 인식 모델 다운로드 중… 창을 닫지 마세요.");
+                        await using (var source = await WhisperGgmlDownloader.Default.GetGgmlModelAsync(GgmlType.Base))
+                        await using (var target = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        {
+                            await source.CopyToAsync(target, cancellationToken);
+                        }
+                        if (!IsValidModel(temporary))
+                            throw new InvalidDataException("모델 다운로드가 완료되지 않았어요. 자막 시작을 눌러 다시 시도하세요.");
+                        File.Move(temporary, modelPath, true);
+                    }
+                    finally
+                    {
+                        if (File.Exists(temporary)) File.Delete(temporary);
+                    }
+                }
             }
-            _factory = WhisperFactory.FromPath(modelPath);
+            StatusChanged?.Invoke(this, "음성 인식 모델을 불러오는 중…");
+            // Managed file IO supports Korean paths; native fopen paths can fail.
+            _factory = await Task.Run(async () =>
+            {
+                var bytes = await File.ReadAllBytesAsync(modelPath, cancellationToken);
+                var factory = WhisperFactory.FromBuffer(bytes);
+                try
+                {
+                    using var processor = factory.CreateBuilder().WithLanguage("ja").Build();
+                    return factory;
+                }
+                catch
+                {
+                    factory.Dispose();
+                    throw;
+                }
+            }, cancellationToken);
+            StatusChanged?.Invoke(this, "음성 인식 모델 준비 완료.");
         }
         finally
         {
             _modelGate.Release();
         }
+    }
+
+    private static bool IsValidModel(string path)
+    {
+        if (!File.Exists(path)) return false;
+        using var stream = File.OpenRead(path);
+        if (stream.Length < 140_000_000) return false;
+        using var reader = new BinaryReader(stream);
+        return reader.ReadUInt32() == 0x67676d6c;
+    }
+
+    public async Task VerifyRecognitionAsync()
+    {
+        await EnsureReadyAsync();
+        using var processor = _factory!.CreateBuilder().WithLanguage("ja").Build();
+        using var wav = WavEncoder.FromPcm16(new byte[BytesPerSecond * 2]);
+        await foreach (var segment in processor.ProcessAsync(wav)) { }
     }
 
     public void Reset(string? language)
