@@ -25,6 +25,8 @@ jobs:
           New-Item -ItemType Directory -Force publish/Models | Out-Null
           curl.exe --fail --location --retry 3 --output publish/Models/ggml-base.bin "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
           if ($LASTEXITCODE -ne 0) { throw "Model download failed" }
+          curl.exe --fail --location --retry 3 --output publish/test-ja.wav "https://raw.githubusercontent.com/wudale/whisper-asr-server/main/samples/ja.wav"
+          if ($LASTEXITCODE -ne 0) { throw "Japanese sample download failed" }
       - name: Run native model and recognition test in Korean folder
         shell: pwsh
         run: |
@@ -34,7 +36,7 @@ jobs:
           if (-not $process.WaitForExit(120000)) { $process.Kill(); throw "Recognition test timed out" }
           $result = Get-Content "한글 실행 테스트/self-test.txt" -Raw
           Write-Output $result
-          if ($process.ExitCode -ne 0 -or $result.Trim() -ne "MODEL_LOAD_AND_RECOGNITION_OK") { throw "Recognition test failed" }
+          if ($process.ExitCode -ne 0 -or -not $result.Contains("MODEL_LOAD_AND_RECOGNITION_OK")) { throw "Recognition test failed" }
           Move-Item "한글 실행 테스트" publish
           Compress-Archive -Path publish\* -DestinationPath AnimeAudioCaptioner-ModelIncluded.zip
       - uses: actions/upload-artifact@v4
