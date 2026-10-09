@@ -38,8 +38,8 @@ jobs:
           Write-Output $result
           if ($process.ExitCode -ne 0 -or -not $result.Contains("MODEL_LOAD_AND_RECOGNITION_OK")) { throw "Recognition test failed" }
           Move-Item "한글 실행 테스트" publish
-          Compress-Archive -Path publish\* -DestinationPath AnimeAudioCaptioner-ModelIncluded.zip
+          Compress-Archive -Path publish\* -DestinationPath AnimeAudioCaptioner-Live-0.2.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: AnimeAudioCaptioner-model-included
+          name: AnimeAudioCaptioner-live-0.2
           path: AnimeAudioCaptioner-ModelIncluded.zip

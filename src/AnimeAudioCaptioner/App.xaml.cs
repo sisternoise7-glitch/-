@@ -19,12 +19,20 @@ public partial class App : Application
                 var japanese = await engine.VerifyRecognitionAsync(Path.Combine(AppContext.BaseDirectory, "test-ja.wav"));
                 if (!japanese.Contains("音声") || !japanese.Contains("テスト"))
                     throw new InvalidDataException("Japanese audio recognition mismatch: " + japanese);
+                var streaming = await engine.VerifyStreamingAsync(Path.Combine(AppContext.BaseDirectory, "test-ja.wav"));
+                if (!streaming.Contains("こんにちは") && !streaming.Contains("音声"))
+                    throw new InvalidDataException("Streaming recognition mismatch: " + streaming);
                 var translator = new KoreanTranslationService();
                 var korean = await translator.TranslateAsync(japanese, "ja");
                 if (!korean.Any(c => c >= '\uAC00' && c <= '\uD7A3') || !korean.Contains("테스트"))
                     throw new InvalidDataException("Korean translation mismatch: " + korean);
                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test.txt"),
-                    "Japanese: " + japanese + Environment.NewLine + "Korean: " + korean + Environment.NewLine + "MODEL_LOAD_AND_RECOGNITION_OK");
+                    "Japanese: " + japanese + Environment.NewLine + "Streaming: " + streaming + Environment.NewLine + "Korean: " + korean + Environment.NewLine + "MODEL_LOAD_AND_RECOGNITION_OK");
+                var window = new MainWindow(false);
+                var displayed = await window.RunCaptionTestAsync();
+                if (!displayed.Contains("테스트")) throw new InvalidDataException("Overlay pipeline failed: " + displayed);
+                window.Close();
+                File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "self-test.txt"), Environment.NewLine + "WPF_CAPTION_PIPELINE_OK");
                 Shutdown(0);
             }
             catch (Exception error)

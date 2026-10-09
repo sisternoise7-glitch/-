@@ -1,83 +1,92 @@
+using System.Diagnostics;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
-
 namespace AnimeAudioCaptioner.Services;
 
+public sealed record AudioLevel(string Device, double Peak, long Bytes);
 public sealed class SystemAudioCapture : IDisposable
 {
-    private readonly WhisperCaptionEngine _engine;
-    private WasapiLoopbackCapture? _capture;
-    private int _sourceRate;
-    private int _channels;
-    private int _resampleRemainder;
-    private bool _disposed;
-
-    public bool IsRunning => _capture is not null;
-    public event EventHandler<string>? StatusChanged;
-
-    public SystemAudioCapture(WhisperCaptionEngine engine)
+    private sealed class Input
     {
-        _engine = engine;
+        public required MMDevice Device;
+        public required WasapiLoopbackCapture Capture;
+        public required AudioPcmConverter Converter;
+        public double Peak;
+        public long LastSignal;
     }
-
+    private readonly WhisperCaptionEngine _engine;
+    private readonly List<Input> _inputs = new();
+    private readonly object _gate = new();
+    private Input? _selected;
+    private long _lastReport, _bytes;
+    private bool _running;
+    public bool IsRunning => _running;
+    public event EventHandler<string>? StatusChanged;
+    public event EventHandler<AudioLevel>? LevelChanged;
+    public SystemAudioCapture(WhisperCaptionEngine engine) => _engine = engine;
     public void Start(string language)
     {
-        if (_capture is not null) return;
+        Stop();
         _engine.Reset(language);
-        _capture = new WasapiLoopbackCapture();
-        _sourceRate = _capture.WaveFormat.SampleRate;
-        _channels = _capture.WaveFormat.Channels;
-        _resampleRemainder = 0;
-        _capture.DataAvailable += OnDataAvailable;
-        _capture.RecordingStopped += OnRecordingStopped;
-        _capture.StartRecording();
-        StatusChanged?.Invoke(this, "PC에서 재생되는 소리를 듣는 중 — 영상 재생 후 자막이 표시됩니다.");
-    }
-
-    private void OnDataAvailable(object? sender, WaveInEventArgs e)
-    {
-        if (_sourceRate <= 0 || _channels <= 0 || e.BytesRecorded < sizeof(float) * _channels) return;
-
-        var samples = new float[e.BytesRecorded / sizeof(float)];
-        Buffer.BlockCopy(e.Buffer, 0, samples, 0, samples.Length * sizeof(float));
-        var output = new List<short>();
-        for (var offset = 0; offset + _channels <= samples.Length; offset += _channels)
+        _bytes = 0; _running = true;
+        using var enumerator = new MMDeviceEnumerator();
+        foreach (var device in enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
         {
-            var mono = 0f;
-            for (var channel = 0; channel < _channels; channel++) mono += samples[offset + channel];
-            mono /= _channels;
-
-            _resampleRemainder += 16000;
-            if (_resampleRemainder < _sourceRate) continue;
-            _resampleRemainder -= _sourceRate;
-            output.Add((short)Math.Clamp(mono * short.MaxValue, short.MinValue, short.MaxValue));
+            try
+            {
+                var capture = new WasapiLoopbackCapture(device);
+                var input = new Input { Device = device, Capture = capture, Converter = new AudioPcmConverter(capture.WaveFormat) };
+                capture.DataAvailable += (_, e) => Receive(input, e);
+                capture.RecordingStopped += (_, e) => { if (e.Exception is not null && _running) StatusChanged?.Invoke(this, "소리 연결 오류: " + e.Exception.Message); };
+                _inputs.Add(input);
+                capture.StartRecording();
+            }
+            catch (Exception error)
+            {
+                StatusChanged?.Invoke(this, "출력 장치 연결 실패: " + error.Message);
+                device.Dispose();
+            }
         }
-
-        if (output.Count == 0) return;
-        var pcm = new byte[output.Count * sizeof(short)];
-        Buffer.BlockCopy(output.ToArray(), 0, pcm, 0, pcm.Length);
-        _engine.AppendPcm16(pcm, 16000, null);
+        if (_inputs.Count == 0) { _running = false; throw new InvalidOperationException("사용 가능한 스피커·헤드셋 출력 장치를 찾지 못했어요."); }
+        StatusChanged?.Invoke(this, $"출력 장치 {_inputs.Count}개 확인 — 실제 소리가 들어오면 입력 막대가 움직입니다.");
     }
-
-    private void OnRecordingStopped(object? sender, StoppedEventArgs e)
+    private void Receive(Input input, WaveInEventArgs e)
     {
-        if (e.Exception is not null) StatusChanged?.Invoke(this, $"시스템 소리 연결 오류: {e.Exception.Message}");
+        if (!_running) return;
+        try
+        {
+            var pcm = input.Converter.Convert(e.Buffer, e.BytesRecorded, out var peak);
+            var now = Stopwatch.GetTimestamp();
+            bool accept, report;
+            lock (_gate)
+            {
+                input.Peak = peak;
+                if (peak > 0.002) input.LastSignal = now;
+                if (_selected is null || (now - _selected.LastSignal) / (double)Stopwatch.Frequency > 1.0)
+                {
+                    if (peak > 0.002) _selected = input;
+                }
+                accept = _selected == input;
+                if (accept) _bytes += e.BytesRecorded;
+                report = accept && (now - _lastReport) / (double)Stopwatch.Frequency >= 0.2;
+                if (report) _lastReport = now;
+            }
+            if (accept && pcm.Length > 0) _engine.AppendPcm16(pcm, 16000, null);
+            if (report) LevelChanged?.Invoke(this, new AudioLevel(input.Device.FriendlyName, peak, _bytes));
+        }
+        catch (Exception error) { StatusChanged?.Invoke(this, "음성 입력 처리 오류: " + error.Message); }
     }
-
     public void Stop()
     {
-        var capture = Interlocked.Exchange(ref _capture, null);
-        if (capture is null) return;
-        capture.DataAvailable -= OnDataAvailable;
-        capture.RecordingStopped -= OnRecordingStopped;
-        try { capture.StopRecording(); } catch { }
-        capture.Dispose();
-        StatusChanged?.Invoke(this, "자막을 중지했어요.");
+        _running = false;
+        foreach (var input in _inputs)
+        {
+            try { input.Capture.StopRecording(); } catch { }
+            input.Capture.Dispose(); input.Device.Dispose();
+        }
+        _inputs.Clear();
+        lock (_gate) { _selected = null; }
+        _engine.Reset(null);
     }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        Stop();
-    }
+    public void Dispose() => Stop();
 }

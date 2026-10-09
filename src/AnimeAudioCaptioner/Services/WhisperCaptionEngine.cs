@@ -11,14 +11,17 @@ public sealed class WhisperCaptionEngine : IDisposable
 {
     private const int SampleRate = 16000;
     private const int BytesPerSecond = SampleRate * sizeof(short);
-    private const int WindowBytes = BytesPerSecond * 4;
-    private const int MaxBufferedBytes = BytesPerSecond * 12;
+    private const int WindowBytes = BytesPerSecond;
+    private const int MaxBufferedBytes = BytesPerSecond * 3;
 
     private readonly object _gate = new();
     private readonly SemaphoreSlim _modelGate = new(1, 1);
     private readonly List<byte> _pending = new();
     private WhisperFactory? _factory;
     private bool _processing;
+    private bool _disposed;
+    private int _newBytes;
+    private int _generation;
     private string _language = "ja";
     private string _lastTranscript = string.Empty;
 
@@ -113,75 +116,108 @@ public sealed class WhisperCaptionEngine : IDisposable
     {
         lock (_gate)
         {
-            _pending.Clear();
+            _generation++;
+            _pending.Clear(); _newBytes = 0;
             _lastTranscript = string.Empty;
-            _language = language is "en" or "en-US" ? "en" : "ja";
+            if (language is not null) _language = language is "en" or "en-US" ? "en" : "ja";
         }
     }
 
     public void AppendPcm16(byte[] pcm, int sampleRate, string? language)
     {
-        if (sampleRate != SampleRate || pcm.Length == 0 || pcm.Length % 2 != 0) return;
+        if (_disposed || sampleRate != SampleRate || pcm.Length == 0 || pcm.Length % 2 != 0) return;
         byte[]? window = null;
         string transcriptionLanguage;
+        int generation;
         lock (_gate)
         {
-            if (!string.IsNullOrWhiteSpace(language)) _language = language is "en" or "en-US" ? "en" : "ja";
-            _pending.AddRange(pcm);
+            _pending.AddRange(pcm); _newBytes += pcm.Length;
             if (_pending.Count > MaxBufferedBytes) _pending.RemoveRange(0, _pending.Count - MaxBufferedBytes);
-            transcriptionLanguage = _language;
-            if (!_processing && _pending.Count >= WindowBytes)
+            transcriptionLanguage = _language; generation = _generation;
+            if (!_processing && _newBytes >= WindowBytes)
             {
-                window = _pending.Take(WindowBytes).ToArray();
-                _pending.RemoveRange(0, WindowBytes);
-                _processing = true;
+                window = _pending.ToArray();
+                _newBytes = 0; _processing = true;
             }
         }
-        if (window is not null) _ = ProcessWindowAsync(window, transcriptionLanguage);
+        // Native recognition must never block the WASAPI capture callback.
+        if (window is not null) _ = Task.Run(() => ProcessWindowAsync(window, transcriptionLanguage, generation));
     }
 
-    private async Task ProcessWindowAsync(byte[] pcm, string language)
+    private async Task ProcessWindowAsync(byte[] pcm, string language, int generation)
     {
         try
         {
-            if (AverageAmplitude(pcm) < 180) return;
+            if (AverageAmplitude(pcm) < 45)
+            {
+                StatusChanged?.Invoke(this, "입력은 있지만 대사 음량이 작거나 무음입니다.");
+                return;
+            }
+            StatusChanged?.Invoke(this, $"대사 인식 중 — 최근 {pcm.Length / (double)BytesPerSecond:0.0}초");
             await EnsureReadyAsync();
             using var wav = WavEncoder.FromPcm16(pcm);
             using var processor = _factory!.CreateBuilder().WithLanguage(language).Build();
+            var watch = System.Diagnostics.Stopwatch.StartNew();
             var text = new StringBuilder();
             await foreach (var segment in processor.ProcessAsync(wav)) text.Append(' ').Append(segment.Text);
             var transcript = Normalize(text.ToString());
-            if (string.IsNullOrWhiteSpace(transcript)) return;
-
             bool changed;
             lock (_gate)
             {
-                changed = !LooksRepeated(_lastTranscript, transcript);
+                changed = !_disposed && generation == _generation && transcript.Length > 0 && _lastTranscript != transcript;
                 if (changed) _lastTranscript = transcript;
             }
             if (changed) TranscriptReady?.Invoke(this, transcript);
+            StatusChanged?.Invoke(this, $"인식 처리 {watch.Elapsed.TotalSeconds:0.0}초" + (transcript.Length == 0 ? " — 대사를 찾지 못했어요." : " — 대사 인식 완료."));
         }
         catch (Exception error)
         {
-            StatusChanged?.Invoke(this, $"음성 인식 오류: {error.Message}");
+            if (!_disposed) StatusChanged?.Invoke(this, $"음성 인식 오류: {error.Message}");
         }
         finally
         {
             byte[]? next = null;
             string languageForNext;
+            int nextGeneration;
             lock (_gate)
             {
                 _processing = false;
-                languageForNext = _language;
-                if (_pending.Count >= WindowBytes)
+                languageForNext = _language; nextGeneration = _generation;
+                if (!_disposed && _newBytes >= WindowBytes && _pending.Count >= WindowBytes)
                 {
-                    next = _pending.Take(WindowBytes).ToArray();
-                    _pending.RemoveRange(0, WindowBytes);
-                    _processing = true;
+                    next = _pending.ToArray(); _newBytes = 0; _processing = true;
                 }
+                if (_disposed) { _factory?.Dispose(); _factory = null; }
             }
-            if (next is not null) _ = ProcessWindowAsync(next, languageForNext);
+            if (next is not null) _ = Task.Run(() => ProcessWindowAsync(next, languageForNext, nextGeneration));
         }
+    }
+
+    public async Task<string> VerifyStreamingAsync(string audioPath)
+    {
+        await EnsureReadyAsync();
+        Reset("ja");
+        var transcripts = new List<string>();
+        void Collect(object? sender, string text) { lock (transcripts) transcripts.Add(text); }
+        TranscriptReady += Collect;
+        try
+        {
+            using var reader = new AudioFileReader(audioPath);
+            var converter = new AudioPcmConverter(reader.WaveFormat);
+            var floats = new float[reader.WaveFormat.SampleRate * reader.WaveFormat.Channels / 20];
+            int read;
+            while ((read = reader.Read(floats, 0, floats.Length)) > 0)
+            {
+                var raw = new byte[read * 4];
+                Buffer.BlockCopy(floats, 0, raw, 0, raw.Length);
+                var pcm = converter.Convert(raw, raw.Length, out _);
+                AppendPcm16(pcm, 16000, "ja");
+                await Task.Delay(50);
+            }
+            await Task.Delay(8000);
+            lock (transcripts) return string.Join(" / ", transcripts);
+        }
+        finally { TranscriptReady -= Collect; Reset("ja"); }
     }
 
     private static double AverageAmplitude(byte[] pcm)
@@ -197,18 +233,12 @@ public sealed class WhisperCaptionEngine : IDisposable
 
     private static string Normalize(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Trim();
 
-    private static bool LooksRepeated(string previous, string current)
-    {
-        if (string.IsNullOrWhiteSpace(previous)) return false;
-        var left = new HashSet<string>(previous.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-        var right = new HashSet<string>(current.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-        if (left.Count == 0 || right.Count == 0) return previous == current;
-        return left.Intersect(right).Count() / (double)Math.Min(left.Count, right.Count) >= 0.72;
-    }
-
     public void Dispose()
     {
-        _factory?.Dispose();
-        _modelGate.Dispose();
+        lock (_gate)
+        {
+            _disposed = true; _generation++; _pending.Clear();
+            if (!_processing) { _factory?.Dispose(); _factory = null; }
+        }
     }
 }
