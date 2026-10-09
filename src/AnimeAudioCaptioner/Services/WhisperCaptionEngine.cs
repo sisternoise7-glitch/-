@@ -1,4 +1,6 @@
 using System.Text;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using System.IO;
 using Whisper.net;
 using Whisper.net.Ggml;
@@ -92,12 +94,19 @@ public sealed class WhisperCaptionEngine : IDisposable
         return reader.ReadUInt32() == 0x67676d6c;
     }
 
-    public async Task VerifyRecognitionAsync()
+    public async Task<string> VerifyRecognitionAsync(string audioPath)
     {
         await EnsureReadyAsync();
+        using var audio = new AudioFileReader(audioPath);
+        ISampleProvider mono = audio.WaveFormat.Channels == 1 ? audio : audio.ToMono();
+        var resampled = new WdlResamplingSampleProvider(mono, SampleRate);
+        using var wav = new MemoryStream();
+        WaveFileWriter.WriteWavFileToStream(wav, new SampleToWaveProvider16(resampled));
+        wav.Position = 0;
         using var processor = _factory!.CreateBuilder().WithLanguage("ja").Build();
-        using var wav = WavEncoder.FromPcm16(new byte[BytesPerSecond * 2]);
-        await foreach (var segment in processor.ProcessAsync(wav)) { }
+        var text = new StringBuilder();
+        await foreach (var segment in processor.ProcessAsync(wav)) text.Append(segment.Text);
+        return text.ToString().Trim();
     }
 
     public void Reset(string? language)
