@@ -9,6 +9,7 @@ public sealed class SystemAudioCapture : IDisposable
     private sealed class Input
     {
         public required MMDevice Device;
+        public required string DeviceName;
         public required WasapiLoopbackCapture Capture;
         public required AudioPcmConverter Converter;
         public double Peak;
@@ -35,7 +36,7 @@ public sealed class SystemAudioCapture : IDisposable
             try
             {
                 var capture = new WasapiLoopbackCapture(device);
-                var input = new Input { Device = device, Capture = capture, Converter = new AudioPcmConverter(capture.WaveFormat) };
+                var input = new Input { Device = device, DeviceName = device.FriendlyName, Capture = capture, Converter = new AudioPcmConverter(capture.WaveFormat) };
                 capture.DataAvailable += (_, e) => Receive(input, e);
                 capture.RecordingStopped += (_, e) => { if (e.Exception is not null && _running) StatusChanged?.Invoke(this, "소리 연결 오류: " + e.Exception.Message); };
                 _inputs.Add(input);
@@ -72,7 +73,7 @@ public sealed class SystemAudioCapture : IDisposable
                 if (report) _lastReport = now;
             }
             if (accept && pcm.Length > 0) _engine.AppendPcm16(pcm, 16000, null);
-            if (report) LevelChanged?.Invoke(this, new AudioLevel(input.Device.FriendlyName, peak, _bytes));
+            if (report) LevelChanged?.Invoke(this, new AudioLevel(input.DeviceName, peak, _bytes));
         }
         catch (Exception error) { StatusChanged?.Invoke(this, "음성 입력 처리 오류: " + error.Message); }
     }

@@ -1,7 +1,7 @@
 <Window x:Class="AnimeAudioCaptioner.MainWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="음성 한글자막 0.2 — 입력 확인" Height="720" Width="700" MinHeight="620" MinWidth="620"
+ Title="음성 한글자막 0.2.1 — 입력 확인" Height="720" Width="700" MinHeight="620" MinWidth="620"
  WindowStartupLocation="CenterScreen" Background="#10131A" Foreground="#F3F4F6">
  <ScrollViewer VerticalScrollBarVisibility="Auto">
  <StackPanel Margin="24">
