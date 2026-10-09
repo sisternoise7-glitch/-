@@ -17,11 +17,27 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-      - shell: pwsh
+      - name: Publish and include speech model
+        shell: pwsh
         run: |
           dotnet publish src/AnimeAudioCaptioner/AnimeAudioCaptioner.csproj --configuration Release --runtime win-x64 --self-contained true --output publish
-          Compress-Archive -Path publish\* -DestinationPath AnimeAudioCaptioner-ReadyToRun.zip
+          if ($LASTEXITCODE -ne 0) { throw "Publish failed" }
+          New-Item -ItemType Directory -Force publish/Models | Out-Null
+          curl.exe --fail --location --retry 3 --output publish/Models/ggml-base.bin "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+          if ($LASTEXITCODE -ne 0) { throw "Model download failed" }
+      - name: Run native model and recognition test in Korean folder
+        shell: pwsh
+        run: |
+          Move-Item publish "한글 실행 테스트"
+          $exe = Join-Path $PWD "한글 실행 테스트/AnimeAudioCaptioner.exe"
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-test" -PassThru
+          if (-not $process.WaitForExit(120000)) { $process.Kill(); throw "Recognition test timed out" }
+          $result = Get-Content "한글 실행 테스트/self-test.txt" -Raw
+          Write-Output $result
+          if ($process.ExitCode -ne 0 -or $result.Trim() -ne "MODEL_LOAD_AND_RECOGNITION_OK") { throw "Recognition test failed" }
+          Move-Item "한글 실행 테스트" publish
+          Compress-Archive -Path publish\* -DestinationPath AnimeAudioCaptioner-ModelIncluded.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: AnimeAudioCaptioner-ready-to-run
-          path: AnimeAudioCaptioner-ReadyToRun.zip
+          name: AnimeAudioCaptioner-model-included
+          path: AnimeAudioCaptioner-ModelIncluded.zip
