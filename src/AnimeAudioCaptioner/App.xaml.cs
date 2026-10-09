@@ -16,8 +16,15 @@ public partial class App : Application
             try
             {
                 using var engine = new WhisperCaptionEngine();
-                await engine.VerifyRecognitionAsync();
-                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test.txt"), "MODEL_LOAD_AND_RECOGNITION_OK");
+                var japanese = await engine.VerifyRecognitionAsync(Path.Combine(AppContext.BaseDirectory, "test-ja.wav"));
+                if (!japanese.Contains("音声") || !japanese.Contains("テスト"))
+                    throw new InvalidDataException("Japanese audio recognition mismatch: " + japanese);
+                var translator = new KoreanTranslationService();
+                var korean = await translator.TranslateAsync(japanese, "ja");
+                if (!korean.Any(c => c >= '\uAC00' && c <= '\uD7A3') || !korean.Contains("테스트"))
+                    throw new InvalidDataException("Korean translation mismatch: " + korean);
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test.txt"),
+                    "Japanese: " + japanese + Environment.NewLine + "Korean: " + korean + Environment.NewLine + "MODEL_LOAD_AND_RECOGNITION_OK");
                 Shutdown(0);
             }
             catch (Exception error)
