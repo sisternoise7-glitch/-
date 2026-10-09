@@ -57,7 +57,8 @@ public partial class MainWindow : Window
     {
         try
         {
-            var korean = await _translator.TranslateAsync(transcript, SelectedLanguage, _lifetime.Token);
+            var language = await Dispatcher.InvokeAsync(() => SelectedLanguage);
+            var korean = await _translator.TranslateAsync(transcript, language, _lifetime.Token);
             await Dispatcher.InvokeAsync(() =>
             {
                 _overlay.ShowCaption(korean);
